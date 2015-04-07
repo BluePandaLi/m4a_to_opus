@@ -1,0 +1,184 @@
+#!/usr/bin/env python
+
+# Version 1.2
+
+"""Transcodes given file to "opus", if it has an aac-like extension
+(aac, 3gp, mp4, m4a, m4b, mpg).
+
+By default the bitrate of the source material is used, but may be
+limited by the --bitrate parameter or the BITRATE environment variable,
+both in kbit/s.
+
+Usage with youtube-dl in a shell script:
+    youtube-dl "$@" -x --exec "m4a_to_opus -d"
+"""
+
+# Copyright 2015 Gregor Bollerhey
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+from __future__ import print_function
+import argparse
+import subprocess
+import re, sys, time
+import os, os.path
+import collections
+
+MB_per_kbit = 0.000125
+
+# vt100 terminal codes
+CUR_UP = '\x1b[1A'
+ERASE_LINE = '\x1b[2K'
+
+
+# parse arguments
+parser = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawTextHelpFormatter)
+parser.add_argument("path",
+                    help="path to the input file")
+
+parser.add_argument("-d",
+                help="delete orginal file after conversion",
+                action="store_true")
+
+parser.add_argument("-y",
+                help="delete output file if it already exists",
+                action="store_true")
+
+parser.add_argument("--bitrate",
+                    help="Desired bitrate limit in kbit/s. Silently "
+                    "superseeds the BITRATE variable.",
+                    default=None, type=int)
+
+args = parser.parse_args()
+
+
+# if aac-like extension (from wikipedia)
+if not re.match(r'.*?\.(aac|3gp|mp4|m4a|m4b|mpg)$', args.path):
+    exit(0)
+
+
+# determine output path, handle existing path
+outpath = args.path.rsplit('.',1)[0] + '.opus'
+if os.path.exists(outpath) and not args.y:
+    print('path exists: "%s"' % outpath)
+    exit(1)
+
+
+# run avprobe to get some information
+avprobe = subprocess.check_output(['avprobe', args.path],
+        stderr=subprocess.STDOUT)
+
+
+# determine bitrate limit from --bitrate > env(BITRATE) > avprobe
+bitrate_src = int(re.search(r'bitrate: ([0-9]+) kb/s', avprobe).group(1))
+
+if args.bitrate is None:
+    try:
+        bitrate = int(os.environ['BITRATE'])
+    except KeyError:
+        bitrate = bitrate_src
+else:
+    bitrate = int(args.bitrate)
+
+bitrate = min(bitrate, bitrate_src)
+
+print('converting to opus using bitrate %d kbit/s' % bitrate)
+
+
+# duration for percentual progress stats
+duration = re.search(r'Duration: (\d+):(\d+):(\d+).(\d+)', avprobe)
+if not duration is None:
+    hh, mm, ss, frac_ss = map(int, duration.groups())
+    duration = hh*3600.0 + mm*60.0 + ss + frac_ss/100.0
+    print('duration %d seconds, expected raw size: %d MB' % (
+            duration, duration*bitrate*MB_per_kbit))
+
+
+# call avconv to transcode, calculate progress by watching output
+if duration is None:
+    avconv_stderr = None # use internal stat output
+else:
+    avconv_stderr = subprocess.PIPE # use progress filter
+
+av_cmd = ['avconv', '-threads', 'auto', '-i', args.path, '-vn',
+        '-acodec', 'opus', '-b', str(bitrate)+'K', outpath]
+
+if args.y:
+    av_cmd.append('-y')
+
+avconv = subprocess.Popen(av_cmd, stderr=avconv_stderr)
+
+class Speedometer:
+    """incrementally calculates walltime-speed of changing y based on
+    linear regression."""
+
+    def __init__(self, N=100, epsilon=0.1, delta=0.1):
+        self.epsilon, self.delta = epsilon, delta
+        self.x = collections.deque(maxlen=N)
+        self.y = collections.deque(maxlen=N)
+
+    def add(self, yn):
+        t = time.time()
+        yn = float(yn)
+
+        if ((len(self.x)>0 and t-self.x[-1] < self.delta) or
+                (len(self.y)>0 and yn-self.y[-1] < self.epsilon)):
+            return # discard if too close together
+
+        self.x.append(t)
+        self.y.append(yn)
+
+    def speed(self):
+        n = len(self.x)
+        if n<2:
+            raise ValueError('need at least two data points')
+
+        xm = sum(self.x)/n
+        ym = sum(self.y)/n
+        nom = sum((self.x[i]-xm)*(self.y[i]-ym) for i in xrange(n))
+        den = sum((self.x[i]-xm)**2 for i in xrange(n))
+        return nom/den
+
+
+if duration is None:
+    ret = avconv.wait()
+else:
+    ret = None
+    output_buffer = collections.deque(maxlen=512)
+    print('  progress=?')
+    speedometer = Speedometer()
+
+    while(ret is None):
+        ret = avconv.poll()
+        output_buffer.extend( avconv.stderr.read(1) )
+
+        # get latest "time", completeness is guaranteed by matching the
+        # "bitrate"-b
+        position = re.search(r'.*time=(\d+.\d+) b', ''.join(output_buffer))
+
+        if position is not None:
+            position = float(position.group(1))
+            progress = position/duration
+            speedometer.add(position)
+
+            try:
+                t_remaining = (duration-position)/speedometer.speed()
+                t_remaining = '%d:%02d' % (t_remaining//60, t_remaining%60)
+
+                print(CUR_UP, ERASE_LINE, 'progress=%.1f%% ETA=%s' %
+                        (progress*100.0, t_remaining))
+            except ValueError:
+                pass
+
+    print(CUR_UP, ERASE_LINE, 'progress=100%')
+
+
+# optionally delete source file
+if args.d:
+    subprocess.check_call(['rm', args.path])
+
+
+exit(ret) # return avconv exit status
