@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
-# Version 1.3
+# Version 1.4
 
-"""Transcodes given file to "opus", if it has an aac-like extension
+"""Transcodes given file to opus or vorbis, if it has an aac-like extension
 (aac, 3gp, mp4, m4a, m4b, mpg).
 
 By default the bitrate of the source material is used, but may be
@@ -44,7 +44,7 @@ parser.add_argument("path",
 
 parser.add_argument("-o",
                     help="custom output path, default is source file path "
-                    "with .opus-extension")
+                    "with .opus or .ogg-extension")
 
 parser.add_argument("-d",
                     help="delete orginal file after conversion",
@@ -63,6 +63,10 @@ parser.add_argument("--bitrate",
                     "superseeds the BITRATE variable",
                     type=int)
 
+parser.add_argument("--vorbis",
+                    help="transcode to vorbis instead of opus",
+                    action='store_true')
+
 args = parser.parse_args()
 
 
@@ -73,11 +77,15 @@ if args.o:
         print('source path and target path have to be different')
         exit(1)
 else:
+    new_extension = '.opus' if not args.vorbis else '.ogg'
+    has_extension = re.match(r'.*\..{3,4}', args.path)
+
     # infile has extension -> replace it.
-    if re.match(r'.*\..{3,4}', args.path) and not args.path.endswith('.opus'):
-        outpath = args.path.rsplit('.',1)[0] + '.opus'
+    if has_extension and not args.path.endswith(new_extension):
+        outpath = args.path.rsplit('.',1)[0] + new_extension
     else:
-        outpath = args.path + '.opus'
+        # elsewhere just append
+        outpath = args.path + new_extension
 
 if os.path.exists(outpath) and not args.y:
     print('path exists: "%s", use -y to overwrite' % outpath)
@@ -123,7 +131,8 @@ if not (force or has_aac_ext):
     exit(0)
 
 
-print('converting to opus using bitrate %d kbit/s' % bitrate)
+acodec = 'libopus' if not args.vorbis else 'libvorbis'
+print('converting using %s with bitrate %d kbit/s' % (acodec, bitrate))
 
 
 # duration for percentual progress stats
@@ -141,8 +150,9 @@ if duration is None:
 else:
     avconv_stderr = subprocess.PIPE # use progress filter
 
+
 av_cmd = ['avconv', '-threads', 'auto', '-i', args.path, '-vn',
-        '-acodec', 'opus', '-b', str(bitrate)+'K', outpath]
+        '-acodec', acodec, '-b', str(bitrate)+'K', outpath]
 
 if args.y:
     av_cmd.append('-y')
