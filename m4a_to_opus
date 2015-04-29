@@ -43,15 +43,15 @@ parser.add_argument("path",
                     help="path to the input file")
 
 parser.add_argument("-o",
-                    help="custom output path, default is source file path "
-                    "with .opus or .ogg-extension")
+                    help="output path, default is source file path "
+                    "with appropriately replaced extension.")
 
 parser.add_argument("-d",
                     help="delete orginal file after conversion",
                     action="store_true")
 
 parser.add_argument("-y",
-                    help="delete output file if it already exists",
+                    help="overwrite output file if it already exists",
                     action="store_true")
 
 parser.add_argument("-f",
