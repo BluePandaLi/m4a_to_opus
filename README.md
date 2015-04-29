@@ -31,16 +31,16 @@ Usage with youtube-dl in a shell script:
     youtube-dl "$@" -x --exec "m4a_to_opus -d"
 
 positional arguments:
-  path               path to the input file
+  path               Path to the input file.
 
 optional arguments:
   -h, --help         show this help message and exit
-  -o O               output path, default is source file path with
-                     appropriately replaced extension.
-  -d                 delete orginal file after conversion
-  -y                 overwrite output file if it already exists
-  -f                 always transcode, don't check source extension
-  --bitrate BITRATE  desired bitrate limit in kbit/s, silently superseeds the
-                     BITRATE variable
-  --vorbis           transcode to vorbis instead of opus
+  -o O               Output path, default is source file path
+                         with appropriately replaced extension.
+  -d                 Delete orginal file after conversion.
+  -y                 Overwrite output file if it already exists.
+  -f                 Always transcode, don't check source extension.
+  --bitrate BITRATE  Desired bitrate limit in kbit/s, silently superseeds the
+                         BITRATE variable.
+  --vorbis           Transcode to vorbis instead of opus.
 ```
