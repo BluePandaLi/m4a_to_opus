@@ -154,6 +154,10 @@ else:
 av_cmd = ['avconv', '-threads', 'auto', '-i', args.path, '-vn',
         '-acodec', acodec, '-b', str(bitrate)+'K', outpath]
 
+if not args.vorbis:
+    av_cmd.insert(-1, '-vbr')
+    av_cmd.insert(-1, 'on')
+
 if args.y:
     av_cmd.append('-y')
 
