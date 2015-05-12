@@ -1,16 +1,20 @@
 # m4a\_to\_opus converter
 
-An user friendly frontend for avconv and avprobe to transcode audio to
-vorbis or opus using the bitrate of the source material by default.
+An user friendly front end for avconv and avprobe to transcode audio to
+ogg/vorbis or ogg/opus using the bitrate of the source material.
 
 The distinguishing feature is it only transcodes if the source material
 is in AAC, so it can be played from more devices. It also provides a
-more conventient output (percent finished and ETA instead of current
-position in seconds).
+more convenient output (“percent finished” and ETA instead “current
+position in seconds”).
 
-m4a\_to\_opus is suitable for use with
+~~m4a\_to\_opus is suitable for use with
 [youtube-dl](https://rg3.github.io/youtube-dl/), but also serves well as
-a standalone program.
+a standalone program.~~
+Update: As it turned out most youtube content is lossy low-quality sound,
+transcoded to high bitrate AAC. Another transcoding step is no good unless
+you want an extremely low bitrate and don't care about bad quality. In that
+case use [youtube-podcast](https://github.com/gregor-b/youtube-podcast).
 
 ```
 $ m4a_to_opus -h
@@ -26,9 +30,6 @@ both in kbit/s.
 
 If a given bitrate differs from source bitrate, -f (force transcoding)
 is implied.
-
-Usage with youtube-dl in a shell script:
-    youtube-dl "$@" -x --exec "m4a_to_opus -d"
 
 positional arguments:
   path               Path to the input file.
